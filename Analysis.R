@@ -106,7 +106,18 @@ read.cfa = cfa(read.sem, data = rawDat, std.ov=T, std.lv=T, orthogonal=T)
 # Negative variance on the CC2.
 summary(read.cfa)
 fitmeasures(read.cfa, fit.measures = c("rmsea", "srmr", "cfi", "agfi"))
-# Fit statistics are terrible - none of them meet the target rules of thumb.
+# Fit statistics are OK.
+# RMSEA - ok-ish; SRMR - good
+# CFI - very ok; AGFI - almost ok.
+# rmsea  srmr   cfi  agfi 
+# 0.093 0.072 0.891 0.797 
+# If we restrict to just the three variables that FA provided (see 
+#   SimpleEFForReadingOnly), we get:
+# rmsea  srmr   cfi  agfi 
+# 0.120 0.071 0.931 0.808
+# bad   good  good  ok
+# Seems to me to be six of one half-dozen of the other. we trade RMSEA for CFI.
+# I think the simpler model may actually be more sensible.
 semPlot::semPaths(read.cfa)
 
 # Compare observed vs implied correlations to identify potential missing 
