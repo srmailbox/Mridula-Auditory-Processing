@@ -8,12 +8,20 @@
 #     the correlations with Log10FD (among a few other adjustments). This
 #     version also combines log10FD and FPT into an Auditory Processing LV,
 #     and merges attention and memory into a single Executive Functioning LV.
+# V 2.1
+# 2021-11-18: - factor analysis suggests we really only need BackDigitSpan,
+#     ToEASameW and OppW in the ExecFunc. I'm a little concerned that this means
+#     ExecFunc is really just memory, but I'll fit a version (branched) of it
+#     anyway, and we can decide later if we want it to be the main version.
+#     This version turns out to fit slightly better. The main question is
+#     Executive Function really represents EF, or if it's now just memory.
+#     - Consensus from MS and LC is to use the simplified version.
 
 
 include(tidyverse); include(lavaan)
 
 DataVersion = "2021.11.15"
-ScriptVersion = "2.0"
+ScriptVersion = "2.1"
 
 #### 1. Import the data ####
 # Data is split across two sheets, with the attention tasks in Sheet1.
@@ -83,7 +91,7 @@ read.sem = '
 #### Latent Variables:
 # Language =~ PPVT
 #Memory =~ BackDigitSpan + FwdDigitSpan
-ExecFunc =~ BackDigitSpan + FwdDigitSpan+ToEASky + ToEACreature + ToEAMap + ToEASameW + ToEAOppW
+ExecFunc =~ BackDigitSpan + ToEASameW + ToEAOppW
 AudProc =~ Log10FD + FPT
 
 #### Regressions
@@ -106,11 +114,6 @@ read.cfa = cfa(read.sem, data = rawDat, std.ov=T, std.lv=T, orthogonal=T)
 # Negative variance on the CC2.
 summary(read.cfa)
 fitmeasures(read.cfa, fit.measures = c("rmsea", "srmr", "cfi", "agfi"))
-# Fit statistics are OK.
-# RMSEA - ok-ish; SRMR - good
-# CFI - very ok; AGFI - almost ok.
-# rmsea  srmr   cfi  agfi 
-# 0.093 0.072 0.891 0.797 
 # If we restrict to just the three variables that FA provided (see 
 #   SimpleEFForReadingOnly), we get:
 # rmsea  srmr   cfi  agfi 
@@ -126,9 +129,11 @@ implied.cors = lavInspect(read.cfa, "cov.ov")
 class(implied.cors)="matrix"
 
 obs.cors = cor(rawDat %>% select(all_of(rownames(implied.cors))))
-implied.cors[upper.tri(implied.cors)]=obs.cors[upper.tri(obs.cors)]
-round(implied.cors, 3)
+summary.cors = implied.cors
+summary.cors[upper.tri(implied.cors)]=obs.cors[upper.tri(obs.cors)]
+round(summary.cors, 3)
 
+round(obs.cors - implied.cors, 3)
 ### OK, so the problem is clearly that Log10FD correlates with everything, 
 # but the current structure assumes it correlates with nothing except CTOPP and
 # CC2.
