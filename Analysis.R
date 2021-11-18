@@ -2,10 +2,18 @@
 # A project looking at the relationship between auditory processing and reading
 # in children.
 #
+# Change Log:
+# V 2.0
+# 2021-11-18: - model specification changed in order to better capture the
+#     the correlations with Log10FD (among a few other adjustments). This
+#     version also combines log10FD and FPT into an Auditory Processing LV,
+#     and merges attention and memory into a single Executive Functioning LV.
+
+
 include(tidyverse); include(lavaan)
 
 DataVersion = "2021.11.15"
-ScriptVersion = "1.0"
+ScriptVersion = "2.0"
 
 #### 1. Import the data ####
 # Data is split across two sheets, with the attention tasks in Sheet1.
@@ -27,66 +35,72 @@ rawDat = readxl::read_xlsx(paste0("DataSet.", DataVersion, ".xlsx"), "Feuil1") %
 # Some quick checks to see if it makes sense to merge some sets of variables into
 # latent variables.
 
-### 2A. Cognitive skill variables####
+### 2A. Language variables####
 cor(rawDat %>% select(PPVT, WNV, RANDigits))
 #- not terribly correlated really. Given sample size
-# maybe stick with just WNV (Nonverbal IQ)
+# Will now use only PPVT and instead of Cognitive Skill, this is "Language"
 
-### 2B. Memory ####
-cor(rawDat %>% select(BackDigitSpan, FwdDigitSpan))
-# These are better, keep both
+### 2B. Executive Functioning ####
+cor(rawDat %>% select(BackDigitSpan, FwdDigitSpan, starts_with("ToEA")
+                      , -starts_with("ToEATest"), -ToEACreatureT, -ToEATime))
+# Curious. It looks like the ToEASameW, *DigitSpan and ToEAOppW variables all
+# hang together. Let's see if we are ok to use these all as one factor, or
+# or better with 2.
 
-### 2C. Attention ####
-cor(rawDat %>% select(starts_with("ToEA"), -starts_with("ToEATest")
-                      , -ToEACreatureT, -ToEATime))
-# - not super well correlated, except the two "world" tests. Maybe we should do 
-# a factor analysis:
+ef.fa = factanal(rawDat %>% 
+           select(BackDigitSpan, FwdDigitSpan, starts_with("ToEA")
+                  , -starts_with("ToEATest"), -ToEACreatureT, -ToEATime)
+         , 2)
 
-factanal(~ToEASky+ToEACreature+ToEAMap+ToEASameW+ToEAOppW, data = rawDat
-         , factors=2)
+# Looks like there are at least two factors, but importantly it seems like
+# we may want to drop FwdDigitSpan, and all of the ToEA other than the SameW and
+# OppW
 
-# Factor analysis suggests two factors: one that uses the two "World" variables
-# and one that is just an average of them all.
+## PCA approach
 
-summary(princomp(rawDat %>% select(starts_with("ToEA"), -starts_with("ToEATest")
-                           , -ToEACreatureT, -ToEATime)))
-loadings(princomp(rawDat %>% select(starts_with("ToEA"), -starts_with("ToEATest")
-                                   , -ToEACreatureT, -ToEATime)))
-# PCA says one overall component, and then one that compares the two World tests
-# and to Creature (and Sky to a lesser extent)
+ef.pca = 
+  princomp(rawDat %>% 
+             select(BackDigitSpan, FwdDigitSpan, starts_with("ToEA")
+                    , -starts_with("ToEATest"), -ToEACreatureT, -ToEATime) %>% 
+             scale)
 
-# I think we just keep them all.
+# This suggests one or maybe two components, but particularly the first:
+# 1. Everything, but especially BackDigitSpan, ToEASameW and OppW (41.5% var)
+# 2. The other three ToEA* vs *DigitSpan
+
+# If we really want to combine these into a single latent variable, I think
+# we're talking about memory using the BackDigitSpan and ToEASameW and OppW
+# Need to confirm that ToEASameW and OppW are memory heavy?
+
+### 2C. Auditory Processing ####
+cor(rawDat %>% select(Log10FD, FPT))
 
 #### 3. Set up the Models ####
 
-### 3A. Reading ####
+### 3A. Reading SEM Model####
 
 read.sem = '
 #### Latent Variables:
-Cogskill =~ WNV#+PPVT+RANDigits
-Memory =~ BackDigitSpan + FwdDigitSpan
-Attention =~ ToEASky + ToEACreature + ToEAMap + ToEASameW + ToEAOppW
+# Language =~ PPVT
+#Memory =~ BackDigitSpan + FwdDigitSpan
+ExecFunc =~ BackDigitSpan + FwdDigitSpan+ToEASky + ToEACreature + ToEAMap + ToEASameW + ToEAOppW
+AudProc =~ Log10FD + FPT
 
 #### Regressions
-CC2Nonwords ~ CTOPPElision + FPT + Log10FD + Attention + Memory + Cogskill
-CTOPPElision ~ FPT + Log10FD
-FPT ~ Memory + Attention
+CC2Nonwords ~ CTOPPElision + AudProc + ExecFunc + PPVT
+CTOPPElision ~ ExecFunc + AudProc# + PPVT
+AudProc ~ ExecFunc
 
 #### Correlations
-# BackDigitSpan ~~ FwdDigitSpan
-# ToEASameW ~~ ToEAOppW #+ToEAMap+ToEACreature+ToEASky
-
-#### To deal with poor fits
-Cogskill ~~ Attention + Memory
-Memory ~~ Attention
-
-## Terms added to deal with poor fits of Log10FD
-Log10FD ~~ FPT+Cogskill+Attention+Memory
+PPVT ~~ ExecFunc
 '
+
+# I added PPVT to CTOPPElision since it seems to me that the PPVT really
+# ought to correlate with phoneme awareness, but I guess not.
 
 #### 4. Fit CFAs. ####
 
-### 4A. Reading Only ####
+### 4A. Reading Only Fit ####
 
 read.cfa = cfa(read.sem, data = rawDat, std.ov=T, std.lv=T, orthogonal=T)
 # Negative variance on the CC2.
@@ -107,3 +121,19 @@ round(implied.cors, 3)
 ### OK, so the problem is clearly that Log10FD correlates with everything, 
 # but the current structure assumes it correlates with nothing except CTOPP and
 # CC2.
+
+#### 5. Parameter summaries ####
+
+### 5A. Reading Only Params ####
+
+coefs = list(
+  Reading = list(c("CC2Nonwords", "CTOPPElision"), c("CC2Nonwords", "AudProc")
+                 , c("CC2Nonwords", "PPVT"), c("CC2Nonwords", "ExecFunc"))
+  , PhonAwar = list(c("CTOPPElision", "AudProc"), c("CTOPPElision", "ExecFunc"))
+  , Language = list(c("PPVT", "ExecFunc"))
+  , AudProc = list(c("AudProc", "ExecFunc"))
+  , AudProcLV = list(c("AudProc", "Log10FD"), c("AudProc", "FPT"))
+)
+extract.coef(read.cfa, coefs) %>% bind_rows
+
+
