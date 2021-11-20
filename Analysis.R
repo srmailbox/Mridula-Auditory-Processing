@@ -39,7 +39,8 @@ rawDat = readxl::read_xlsx(paste0("DataSet.", DataVersion, ".xlsx"), "Feuil1") %
          , ToEACreatureT = scale(`ToEATestBCreature Counting Time`)
          , ToEAMap = scale(`ToEATestCMap Mission`)
          , ToEASameW = scale(`ToEATestDSame World`)
-         , ToEAOppW = scale(`ToEATestFOpposite World`))
+         , ToEAOppW = scale(`ToEATestFOpposite World`)
+         , NegLog10FD = -Log10FD)
 
 
 #### 2. Variable Reduction ####
@@ -84,7 +85,7 @@ ef.pca =
 # Need to confirm that ToEASameW and OppW are memory heavy?
 
 ### 2C. Auditory Processing ####
-cor(rawDat %>% select(Log10FD, FPT))
+cor(rawDat %>% select(Log10FD, FPT, NegLog10FD))
 
 #### 3. Set up the Models ####
 
@@ -95,7 +96,7 @@ read.sem = '
 # Language =~ PPVT
 #Memory =~ BackDigitSpan + FwdDigitSpan
 ExecFunc =~ BackDigitSpan + ToEASameW + ToEAOppW
-AudProc =~ Log10FD + FPT
+AudProc =~ NegLog10FD + FPT
 
 #### Regressions
 CC2Nonwords ~ CTOPPElision + AudProc + ExecFunc + PPVT
@@ -116,7 +117,7 @@ readpass.sem = '
 # Language =~ PPVT
 #Memory =~ BackDigitSpan + FwdDigitSpan
 ExecFunc =~ BackDigitSpan + ToEASameW + ToEAOppW
-AudProc =~ Log10FD + FPT
+AudProc =~ NegLog10FD + FPT
 
 #### Regressions
 NARAAccuracy ~ CTOPPElision + AudProc + ExecFunc + PPVT + CC2Nonwords
@@ -216,4 +217,11 @@ rp.coefs = list(
 )
 readpass.coefs = extract.coef(readpass.cfa, rp.coefs) %>% bind_rows
 
+### 5C. Merged Params.
+write.csv(rbind(data.frame(Model="Reading", read.coefs)
+      , data.frame(Model="Read+Pass", readpass.coefs)) %>% 
+  reshape(direction="wide", idvar="Param", timevar="Model")
+  , file=paste0("ModelParameters.", DataVersion, ".v", ScriptVersion, ".csv")
+)
 
+#### 6 General Comments ####
