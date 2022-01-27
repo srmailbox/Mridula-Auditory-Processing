@@ -3,7 +3,8 @@
 # in children.
 #
 # Change Log:
-# V 2.0
+# V 2.1
+# 2022-01-27: - modified to include mediation analysis parameters
 # 2021-11-18: - model specification changed in order to better capture the
 #     the correlations with Log10FD (among a few other adjustments). This
 #     version also combines log10FD and FPT into an Auditory Processing LV,
@@ -23,8 +24,8 @@
 
 include(tidyverse); include(lavaan)
 
-DataVersion = "2021.11.15"
-ScriptVersion = "2.1"
+DataVersion = "2022.01.22"
+ScriptVersion = "2.2"
 
 #### 1. Import the data ####
 # Data is split across two sheets, with the attention tasks in Sheet1.
@@ -120,11 +121,13 @@ ExecFunc =~ BackDigitSpan + ToEASameW + ToEAOppW
 AudProc =~ NegLog10FD + FPT
 
 #### Regressions
-NARAAccuracy ~ CTOPPElision + AudProc + ExecFunc + PPVT + CC2Nonwords
-CC2Nonwords ~ CTOPPElision + AudProc + ExecFunc + PPVT
-CTOPPElision ~ ExecFunc + AudProc
+NARAAccuracy ~ CTOPPElision + AudProc + ExecFunc + PPVT + rc*CC2Nonwords
+CC2Nonwords ~ pr*CTOPPElision + ar*AudProc + ExecFunc + PPVT
+CTOPPElision ~ ExecFunc + ap*AudProc
 AudProc ~ ExecFunc
 
+apr := ap*pr # Test of the indirect path from AudProc to CC2 through CTOPP
+arc := ar*rc # Test of the AudProc to NARA through CC2 path
 #### Correlations
 PPVT ~~ ExecFunc
 '
@@ -164,7 +167,7 @@ round(read.obs - read.implied, 3)
 
 readpass.cfa = cfa(readpass.sem, data = rawDat, std.ov=T, std.lv=T, orthogonal=T)
 # Negative variance on the CC2.
-summary(readpass.cfa)
+summary(readpass.cfa, nd=5)
 fitmeasures(readpass.cfa, fit.measures = c("rmsea", "srmr", "cfi", "agfi"))
 # If we restrict to just the three variables that FA provided (see 
 #   SimpleEFForReadingOnly), we get:
@@ -214,8 +217,11 @@ rp.coefs = list(
   , Language = list(c("PPVT", "ExecFunc"))
   , AudProc = list(c("AudProc", "ExecFunc"))
   , AudProcLV = list(c("AudProc", "Log10FD"), c("AudProc", "FPT"))
+  , Mediated = list(AudPhonRead = c("apr", "ap*pr")
+                    , AudReadComp = c("arc", "ar*rc"))
+  
 )
-readpass.coefs = extract.coef(readpass.cfa, rp.coefs) %>% bind_rows
+readpass.coefs = extract.coef(readpass.cfa, rp.coefs, sig.dig=5)
 
 ### 5C. Merged Params.
 write.csv(rbind(data.frame(Model="Reading", read.coefs)
@@ -224,4 +230,7 @@ write.csv(rbind(data.frame(Model="Reading", read.coefs)
   , file=paste0("ModelParameters.", DataVersion, ".v", ScriptVersion, ".csv")
 )
 
-#### 6 General Comments ####
+#### 6 Reported Coefficients ####
+write.csv(readpass.coefs
+          , file=paste0("ReadPassModel.Parameters.", DataVersion, ".v"
+                        , ScriptVersion, ".csv"))
