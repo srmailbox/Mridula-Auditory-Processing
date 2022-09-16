@@ -82,7 +82,7 @@ hint.sem = '
 # ExecFunc =~ BackDigSpan + AuditoryAttention + VisualAttention
 Attention =~ AuditoryAttention + VisualAttention
 #### Regressions
-HINT ~ a*Q_PhoMani + Attention + DDT
+HINT ~ a*Q_PhoMani + Attention + d*DDT
 LangContent ~ Attention
 Q_PhoMani ~ Attention+b*DDT
 DDT ~ Attention
@@ -91,6 +91,7 @@ HINT ~~ LangContent
 
 ## Parameters:
 APtoHINTindirect := a*b
+APtoHINTtotal :=a*b+d
 '
 
 # 4. Fit CFA ####
@@ -121,14 +122,18 @@ hint.cors[upper.tri(hint.implied)]=hint.obs[upper.tri(hint.obs)]
 round(hint.cors, 3)
 
 round(hint.obs - hint.implied, 3) #%>% rowMeans
-# The problem here is CoreLang which has very poor reconstructions for 4 of
-# of the 6 correlations, + Q_PhoMani~~BackDigSpan.
-
-# So CoreLang is just not being reconstructed no matter what we do.
 
 # 5. Parameter summaries  ####
-# TODO: still need to find a better fitting model.
 
+parameterestimates(hint.cfa) %>% 
+  # filter(op=="~" | op==":=" | op==":=") %>% 
+  mutate(
+    label = paste(lhs, op, rhs)
+  ) %>% 
+  mutate(psig = cut(pvalue, breaks=c(-Inf, .001, .01, .05, .1, 1)
+                    , labels=c("***", "**", "*", "+", ""))
+  ) %>% 
+  select(label, est, psig, pvalue, se, z, ci.lower, ci.upper)
 
 ## 5C. Merged Params.
 write.csv(rbind(data.frame(Model="Reading", hint.coefs)
