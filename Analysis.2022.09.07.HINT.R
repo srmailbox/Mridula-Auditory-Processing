@@ -74,9 +74,9 @@ cor(rawDat %>% select(DDT, AB))
 # Use just DDT which has the highest general correlations
 
 
-# 3. Set up the Model ####
+# 3. Attention SEM ####
 
-hint.sem = '
+attention.sem = '
 #### Latent Variables:
 # ExecFunc =~ .5*BackDigSpan + .25*AuditoryAttention + .25*VisualAttention
 # ExecFunc =~ BackDigSpan + AuditoryAttention + VisualAttention
@@ -85,22 +85,23 @@ Attention =~ AuditoryAttention + VisualAttention
 HINT ~ a*Q_PhoMani + Attention + d*DDT
 LangContent ~ Attention
 Q_PhoMani ~ Attention+b*DDT
-DDT ~ Attention
+DDT ~ c*Attention
 
 HINT ~~ LangContent
 
 ## Parameters:
-APtoHINTindirect := a*b
+AP.PA.HINTindirect := a*b
 APtoHINTtotal :=a*b+d
+
+Attn.AP.HINTpath := d*c
 '
+## 3A. Fit Model ####
 
-# 4. Fit CFA ####
-
-hint.cfa = cfa(hint.sem, data = rawDat %>% select(-Attention)
-               , std.ov=T, std.lv=T, orthogonal=T)
-# Negative variance on the hint.
-summary(hint.cfa)
-fitmeasures(hint.cfa, fit.measures = c("rmsea", "srmr", "cfi", "agfi"))
+attention.cfa = cfa(attention.sem, data = rawDat %>% select(-Attention)
+                    , std.ov=T, std.lv=T, orthogonal=T)
+# Negative variance on the attention.
+summary(attention.cfa)
+fitmeasures(attention.cfa, fit.measures = c("rmsea", "srmr", "cfi", "agfi"))
 # poor, although 3 of the 4 are now close.
 # rmsea  srmr   cfi  agfi 
 # 0.130 0.090 0.893 0.811 
@@ -109,23 +110,23 @@ fitmeasures(hint.cfa, fit.measures = c("rmsea", "srmr", "cfi", "agfi"))
 # Becomes 2 good fit indices, 1 moderately good, and 1 poor
 # rmsea  srmr   cfi  agfi 
 # 0.110 0.062 0.958 0.859 
-semPlot::semPaths(hint.cfa, whatLabels="est")
+semPlot::semPaths(attention.cfa, whatLabels="est")
 
 # Compare observed vs implied correlations to identify potential missing 
 # structure
-hint.implied = lavInspect(hint.cfa, "cov.ov")
-class(hint.implied)="matrix"
+attention.implied = lavInspect(attention.cfa, "cov.ov")
+class(attention.implied)="matrix"
 
-hint.obs = cor(rawDat %>% select(all_of(rownames(hint.implied))))
-hint.cors = hint.implied
-hint.cors[upper.tri(hint.implied)]=hint.obs[upper.tri(hint.obs)]
-round(hint.cors, 3)
+attention.obs = cor(rawDat %>% select(all_of(rownames(attention.implied))))
+attention.cors = attention.implied
+attention.cors[upper.tri(attention.implied)]=attention.obs[upper.tri(attention.obs)]
+round(attention.cors, 3)
 
-round(hint.obs - hint.implied, 3) #%>% rowMeans
+round(attention.obs - attention.implied, 3) #%>% rowMeans
 
-# 5. Parameter summaries  ####
+## 3B. Parameter summaries  ####
 
-parameterestimates(hint.cfa) %>% 
+parameterestimates(attention.cfa) %>% 
   # filter(op=="~" | op==":=" | op==":=") %>% 
   mutate(
     label = paste(lhs, op, rhs)
@@ -135,14 +136,61 @@ parameterestimates(hint.cfa) %>%
   ) %>% 
   select(label, est, psig, pvalue, se, z, ci.lower, ci.upper)
 
-## 5C. Merged Params.
-write.csv(rbind(data.frame(Model="Reading", hint.coefs)
-                , data.frame(Model="Read+Pass", readpass.coefs)) %>% 
-            reshape(direction="wide", idvar="Param", timevar="Model")
-          , file=paste0("ModelParameters.", DataVersion, ".v", ScriptVersion, ".csv")
-)
+# 4. Memory SEM ####
 
-# 6 Reported Coefficients ####
-write.csv(readpass.coefs
-          , file=paste0("ReadPassModel.Parameters.", DataVersion, ".v"
-                        , ScriptVersion, ".csv"))
+memory.sem = '
+#### Latent Variables:
+# ExecFunc =~ .5*BackDigSpan + .25*AuditoryAttention + .25*VisualAttention
+# ExecFunc =~ BackDigSpan + AuditoryAttention + VisualAttention
+# Attention =~ AuditoryAttention + VisualAttention
+Memory =~ BackDigSpan
+#### Regressions
+HINT ~ a*Q_PhoMani + Memory + d*DDT
+LangContent ~ Memory
+Q_PhoMani ~ Memory+b*DDT
+DDT ~ c*Memory
+
+HINT ~~ LangContent
+
+## Parameters:
+AP.PA.HINTindirect := a*b
+APtoHINTtotal :=a*b+d
+Mem.AP.HINTpath := d*c
+'
+
+## 4A. Fit SEM ####
+
+memory.cfa = cfa(memory.sem, data = rawDat #%>% select(-memory)
+                    , std.ov=T, std.lv=T, orthogonal=T)
+
+summary(memory.cfa)
+fitmeasures(memory.cfa, fit.measures = c("rmsea", "srmr", "cfi", "agfi"))
+# 1 good, 1 ok, 2 poor.
+# rmsea  srmr   cfi  agfi 
+# 0.175 0.085 0.912 0.711
+
+semPlot::semPaths(memory.cfa, whatLabels="est")
+
+# Compare observed vs implied correlations to identify potential missing 
+# structure
+memory.implied = lavInspect(memory.cfa, "cov.ov")
+class(memory.implied)="matrix"
+
+memory.obs = cor(rawDat %>% select(all_of(rownames(memory.implied))))
+memory.cors = memory.implied
+memory.cors[upper.tri(memory.implied)]=memory.obs[upper.tri(memory.obs)]
+round(memory.cors, 3)
+
+round(memory.obs - memory.implied, 3) #%>% rowMeans
+
+## 4B. Parameter summaries  ####
+
+parameterestimates(memory.cfa) %>% 
+  filter(op=="~" | op==":=" | op=="~~") %>%
+  mutate(
+    label = paste(lhs, op, rhs)
+  ) %>% 
+  mutate(psig = cut(pvalue, breaks=c(-Inf, .001, .01, .05, .1, 1)
+                    , labels=c("***", "**", "*", "+", ""))
+  ) %>% 
+  select(label, est, psig, pvalue, se, z, ci.lower, ci.upper)
