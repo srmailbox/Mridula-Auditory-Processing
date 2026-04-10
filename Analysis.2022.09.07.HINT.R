@@ -101,15 +101,15 @@ attention.cfa = cfa(attention.sem, data = rawDat %>% select(-Attention)
                     , std.ov=T, std.lv=T, orthogonal=T)
 # Negative variance on the attention.
 summary(attention.cfa)
-fitmeasures(attention.cfa, fit.measures = c("rmsea", "srmr", "cfi", "agfi"))
+fitmeasures(attention.cfa, fit.measures = c("rmsea", "srmr", "cfi", "tli", "agfi"))
 # poor, although 3 of the 4 are now close.
 # rmsea  srmr   cfi  agfi 
 # 0.130 0.090 0.893 0.811 
 
 # With just an Attention LV instead of Executive Function:
 # Becomes 2 good fit indices, 1 moderately good, and 1 poor
-# rmsea  srmr   cfi  agfi 
-# 0.110 0.062 0.958 0.859 
+# rmsea  srmr   cfi   tli  agfi
+# 0.110 0.062 0.958 0.874 0.859 
 semPlot::semPaths(attention.cfa, whatLabels="est")
 
 # Compare observed vs implied correlations to identify potential missing 
