@@ -3,7 +3,10 @@
 # in children.
 #
 # Change Log:
-
+# 2026-04-15: Add a pathway test, and look for explanations for the poor fit in
+#             the memory model.
+#             End result -> add a causal link from BKB/HINT to language fits 
+#             really well.
 
 include(tidyverse); include(lavaan)
 
@@ -82,9 +85,9 @@ attention.sem = '
 # ExecFunc =~ BackDigSpan + AuditoryAttention + VisualAttention
 Attention =~ AuditoryAttention + VisualAttention
 #### Regressions
-HINT ~ a*Q_PhoMani + Attention + d*DDT
+HINT ~ b*Q_PhoMani + Attention + d*DDT
 LangContent ~ Attention
-Q_PhoMani ~ Attention+b*DDT
+Q_PhoMani ~ e*Attention+a*DDT
 DDT ~ c*Attention
 
 HINT ~~ LangContent
@@ -94,6 +97,7 @@ AP.PA.HINTindirect := a*b
 APtoHINTtotal :=a*b+d
 
 Attn.AP.HINTpath := d*c
+Attn.PA.HINTpath := b*e
 '
 ## 3A. Fit Model ####
 
@@ -122,11 +126,40 @@ attention.cors = attention.implied
 attention.cors[upper.tri(attention.implied)]=attention.obs[upper.tri(attention.obs)]
 round(attention.cors, 3)
 
-round(attention.obs - attention.implied, 3) #%>% rowMeans
+round(attention.obs - attention.implied, 3) %>% rowMeans
+
+### 3A.1 Make HINT to Language causal ####
+attention.causal.sem = '
+#### Latent Variables:
+# ExecFunc =~ .5*BackDigSpan + .25*AuditoryAttention + .25*VisualAttention
+# ExecFunc =~ BackDigSpan + AuditoryAttention + VisualAttention
+Attention =~ AuditoryAttention + VisualAttention
+#### Regressions
+HINT ~ b*Q_PhoMani + Attention + d*DDT
+LangContent ~ Attention
+Q_PhoMani ~ e*Attention+a*DDT
+DDT ~ c*Attention
+
+LangContent ~ HINT
+
+## Parameters:
+AP.PA.HINTindirect := a*b
+APtoHINTtotal :=a*b+d
+
+Attn.AP.HINTpath := d*c
+Attn.PA.HINTpath := b*e
+'
+attention.causal.cfa = cfa(attention.causal.sem, data = rawDat %>% select(-Attention)
+                    , std.ov=T, std.lv=T, orthogonal=T)
+# Negative variance on the attention.
+summary(attention.causal.cfa)
+fitmeasures(attention.causal.cfa, fit.measures = c("rmsea", "srmr", "cfi", "tli", "agfi"))
+
+# Well .... looks like this really is the way to go.
 
 ## 3B. Parameter summaries  ####
 
-parameterestimates(attention.cfa) %>% 
+merge(parameterestimates(attention.causal.cfa) %>% 
   # filter(op=="~" | op==":=" | op==":=") %>% 
   mutate(
     label = paste(lhs, op, rhs)
@@ -135,6 +168,17 @@ parameterestimates(attention.cfa) %>%
                     , labels=c("***", "**", "*", "+", ""))
   ) %>% 
   select(label, est, psig, pvalue, se, z, ci.lower, ci.upper)
+  , parameterestimates(attention.cfa) %>% 
+    # filter(op=="~" | op==":=" | op==":=") %>% 
+    mutate(
+      label = paste(lhs, op, rhs)
+    ) %>% 
+    mutate(psig = cut(pvalue, breaks=c(-Inf, .001, .01, .05, .1, 1)
+                      , labels=c("***", "**", "*", "+", ""))
+    ) %>% 
+    select(label, est, psig, pvalue, se, z, ci.lower, ci.upper)
+  , by="label", suffixes=c(".caus", ""), all=T
+) %>% mutate(across(where(is.numeric),~round(.,3)))
 
 # 4. Memory SEM ####
 
@@ -143,19 +187,20 @@ memory.sem = '
 # ExecFunc =~ .5*BackDigSpan + .25*AuditoryAttention + .25*VisualAttention
 # ExecFunc =~ BackDigSpan + AuditoryAttention + VisualAttention
 # Attention =~ AuditoryAttention + VisualAttention
-Memory =~ BackDigSpan
+# Memory =~ BackDigSpan
 #### Regressions
-HINT ~ a*Q_PhoMani + Memory + d*DDT
-LangContent ~ Memory
-Q_PhoMani ~ Memory+b*DDT
-DDT ~ c*Memory
+HINT ~ b*Q_PhoMani + BackDigSpan + d*DDT
+LangContent ~ BackDigSpan
+Q_PhoMani ~ e*BackDigSpan+a*DDT
+DDT ~ c*BackDigSpan
 
-HINT ~~ LangContent
+LangContent ~~ HINT
 
 ## Parameters:
 AP.PA.HINTindirect := a*b
-APtoHINTtotal :=a*b+d
+APtoHINTtotal :=a*b+d # missing DDT->Mem->HINT and DDT->Mem->PA->HINT
 Mem.AP.HINTpath := d*c
+Mem.PA.HINTpath := e*b
 '
 
 ## 4A. Fit SEM ####
@@ -183,14 +228,62 @@ round(memory.cors, 3)
 
 round(memory.obs - memory.implied, 3) #%>% rowMeans
 
+## looks like the main problem is with the LangContent correlations, in 
+## particular PhonManip
+modindices(memory.cfa) %>% arrange(desc(mi))
+# Hm. Turns out making BKB/HINT causal for CELF (Lang) is the solution
+
+### 4A.1 Add PA to Language ####
+memory.causal.sem = '
+#### Latent Variables:
+# ExecFunc =~ .5*BackDigSpan + .25*AuditoryAttention + .25*VisualAttention
+# ExecFunc =~ BackDigSpan + AuditoryAttention + VisualAttention
+# Attention =~ AuditoryAttention + VisualAttention
+# Memory =~ BackDigSpan
+#### Regressions
+HINT ~ b*Q_PhoMani + BackDigSpan + d*DDT
+LangContent ~ BackDigSpan
+Q_PhoMani ~ e*BackDigSpan+a*DDT
+DDT ~ c*BackDigSpan
+
+LangContent ~ HINT
+
+## Parameters:
+AP.PA.HINTindirect := a*b
+APtoHINTtotal :=a*b+d # missing DDT->Mem->HINT and DDT->Mem->PA->HINT
+Mem.AP.HINTpath := d*c
+Mem.PA.HINTpath := e*b
+'
+memory.causal.cfa = cfa(memory.causal.sem, data = rawDat #%>% select(-memory)
+                 , std.ov=T, std.lv=T, orthogonal=T)
+
+summary(memory.causal.cfa)
+fitmeasures(memory.causal.cfa, fit.measures = c("rmsea", "srmr", "cfi", "agfi"))
+
+# Whoa.
+
 ## 4B. Parameter summaries  ####
 
-parameterestimates(memory.cfa) %>% 
-  filter(op=="~" | op==":=" | op=="~~") %>%
-  mutate(
-    label = paste(lhs, op, rhs)
-  ) %>% 
-  mutate(psig = cut(pvalue, breaks=c(-Inf, .001, .01, .05, .1, 1)
-                    , labels=c("***", "**", "*", "+", ""))
-  ) %>% 
-  select(label, est, psig, pvalue, se, z, ci.lower, ci.upper)
+merge(
+  parameterestimates(memory.causal.cfa) %>% 
+    filter(op=="~" | op==":=" | op=="~~") %>%
+    mutate(
+      label = paste(lhs, op, rhs)
+    ) %>% 
+    mutate(psig = cut(pvalue, breaks=c(-Inf, .001, .01, .05, .1, 1)
+                      , labels=c("***", "**", "*", "+", ""))
+    ) %>% 
+    select(label, est, psig, pvalue, se, z, ci.lower, ci.upper) %>% 
+    arrange(label)
+  , parameterestimates(memory.cfa) %>% 
+    filter(op=="~" | op==":=" | op=="~~") %>%
+    mutate(
+      label = paste(lhs, op, rhs)
+    ) %>% 
+    mutate(psig = cut(pvalue, breaks=c(-Inf, .001, .01, .05, .1, 1)
+                      , labels=c("***", "**", "*", "+", ""))
+    ) %>% 
+    select(label, est, psig, pvalue, se, z, ci.lower, ci.upper) %>% 
+    arrange(label)
+  , by="label", suffixes=c(".caus", ""), all=T
+) %>% mutate(across(where(is.numeric), ~round(.,3)))
