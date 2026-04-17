@@ -287,3 +287,10 @@ merge(
     arrange(label)
   , by="label", suffixes=c(".caus", ""), all=T
 ) %>% mutate(across(where(is.numeric), ~round(.,3)))
+
+# 5.0 Parameters for Reporting ####
+parameterestimates(attention.causal.cfa) %>% 
+  write.csv("Attention.ModelEstimates.csv", row.names=F)
+
+parameterestimates(memory.causal.cfa) %>% 
+  write.csv("Memory.ModelEstimates.csv", row.names=F)
