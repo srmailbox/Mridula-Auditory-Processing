@@ -258,7 +258,7 @@ memory.causal.cfa = cfa(memory.causal.sem, data = rawDat #%>% select(-memory)
                  , std.ov=T, std.lv=T, orthogonal=T)
 
 summary(memory.causal.cfa)
-fitmeasures(memory.causal.cfa, fit.measures = c("rmsea", "srmr", "cfi", "agfi"))
+fitmeasures(memory.causal.cfa, fit.measures = c("rmsea", "srmr", "cfi", "tli"))
 
 # Whoa.
 
